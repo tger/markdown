@@ -636,6 +636,16 @@
   (check-md "<i>x</i><table>y</table>"
             '((p () (i () "x") (table () "y"))))
 
+  ;; current-entity-handler and current-strict-markdown
+  (let ([s @~a{"It's a nice way ... to do this"}])
+    (parameterize ([current-strict-markdown? #f])
+      (check-md s '((p () ldquo "It" rsquo "s a nice way " hellip " to do this" rdquo))))
+    (parameterize ([current-strict-markdown? #t])
+      (check-md s '((p () "\"It's a nice way ... to do this\""))))
+    ;; Use of scribble-entity-handler should avoid 'hellip in previous example.
+    (parameterize ([current-entity-handler scribble-entity-handler])
+      (check-md s '((p () ldquo "It" rsquo "s a nice way ... to do this" rdquo)))))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;
   ;; Regression tests

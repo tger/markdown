@@ -22,13 +22,40 @@
  (contract-out
   [read-markdown (->* () (symbol?) xexpr-element-list?)]
   [parse-markdown (->* ((or/c string? path?)) (symbol?) xexpr-element-list?)]
-  [current-strict-markdown? parameter/c]))
+  [current-strict-markdown? (parameter/c boolean?)]
+  [current-entity-handler (parameter/c entity-handler/c)]
+  [default-entity-handler entity-handler/c]
+  [scribble-entity-handler entity-handler/c]))
 
 (module+ test
   (require rackunit))
 
 (define (xexpr-element-list? xs)
   (xexpr? `(dummy () ,@xs)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Entity handler
+
+;; Given an original xexpr and a proposed symbol entity substitution,
+;; an entity-handler returns which to use.
+(define entity-handler/c (-> xexpr/c symbol? xexpr/c))
+
+;; A default entity-handler that accepts every proposed substitution.
+(define (default-entity-handler _ sym)
+  sym)
+
+;; An entity-handler suitable for use to produce x-expressions that
+;; you want to give to scribble, which expects only a limited list.
+(define (scribble-entity-handler orig sym)
+  (match sym
+    [(or 'mdash 'ndash 'ldquo 'lsquo 'rdquo 'rsquo 'larr 'rarr 'prime) sym]
+    [_ orig]))
+
+(define current-entity-handler (make-parameter default-entity-handler))
+
+;; Alias for using the preceding, as we'll be using it frequently:
+(define (ent orig sym)
+  ((current-entity-handler) orig sym))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; General purpose combinators
@@ -302,12 +329,12 @@
 
 (define $smart-em-dash
   (>> (try (pdo (char #\-) (char #\-) (optional (char #\-))))
-      (return 'mdash)))
+      (return (ent "--" 'mdash))))
 
 (define $smart-en-dash
   (try (pdo (char #\-)
             (lookAhead (pdo (many (char #\space)) $digit))
-            (return 'ndash))))
+            (return (ent "-" 'ndash)))))
 
 (define $smart-dashes (<or> $smart-em-dash $smart-en-dash))
 
@@ -322,12 +349,12 @@
                         last-$str-val
                         (for/and ([c (in-string last-$str-val)])
                           (char-numeric? c)))
-                   (return 'prime)]
+                   (return (ent "'" 'prime))]
                   [else (fail "")]))))
 
 (define $smart-apostrophe
   (pdo (char #\')
-       (return 'rsquo))) ;; could use 'apos for HTML5?
+       (return (ent "'" 'rsquo)))) ;; could use 'apos for HTML5?
 
 (define (fail-in-quote-context x)
   (pdo (qc <- (getState 'quote-context))
@@ -353,7 +380,7 @@
        (fail-just-after-str)
        (char #\')
        (lookAhead (<or> $alphaNum (char #\")))
-       (return 'sdquo)))
+       (return #\')))
 
 (define $single-quote-end
   (try (>> (char #\')
@@ -363,14 +390,14 @@
   (try (pdo $single-quote-start
             (xs <- (withState (['quote-context 'single])
                      (many1Till $inline $single-quote-end)))
-            (return `(SPLICE lsquo ,@xs rsquo)))))
+            (return `(SPLICE ,(ent "'" 'lsquo) ,@xs ,(ent "'" 'rsquo))))))
 
 (define $double-quote-start
   (pdo (fail-in-quote-context 'double)
        (fail-just-after-str)
        (char #\")
        (lookAhead (<or> $alphaNum (char #\')))
-       (return 'ldquo)))
+       (return #\")))
 
 (define $double-quote-end
   (try (>> (char #\")
@@ -380,14 +407,15 @@
   (try (pdo $double-quote-start
             (xs <- (withState (['quote-context 'double])
                      (many1Till $inline $double-quote-end)))
-            (return `(SPLICE ldquo ,@xs rdquo)))))
+            (return `(SPLICE ,(ent "\"" 'ldquo) ,@xs ,(ent "\"" 'rdquo))))))
 
 (define $smart-quoted (<or> $smart-quoted/single
                             $smart-quoted/double))
 
 (define $smart-ellipses
-  (<?> (pdo (oneOfStrings "..." " . . . " ". . ." " . . .")
-            (return 'hellip))
+  (<?> (pdo (s <- (>>= (oneOfStrings "..." " . . . " ". . ." " . . .")
+                       (compose1 return list->string)))
+            (return (ent s 'hellip)))
        "ellipsis"))
 
 (define $smart-punctuation
