@@ -56,16 +56,23 @@
   (check-equal? (parse-result (chars-in-balanced #\< #\>) "<yo <yo <yo>>>")
                 "yo <yo <yo>>"))
 
-;; This differs from `between` not just in the `(notFollowedBy
-;; $space)` aspect -- which you could compose with open and supply to
-;; between -- but more importantly because `p` needn't have a negative
-;; check for close.  This uses (many1Till p close). Whereas `between`
-;; is simply `(parser-one open (~> p) close)`
-(define (enclosed open close p) ;; parser? parser? parser? -> (listof any/c)
+;; `enclosed` differs from `between` in two ways:
+;;
+;; - `between` is simply `(parser-one open (~> p) close)` -- maybe
+;;   requiring `p` to have a negative check for `close`, which is
+;;   redundant and slow. Whereas here `p` needn't; this uses
+;;   (many1Till p close).
+;;
+;; - This requires no $space after `open`, and optionally also not
+;;   before `close`.
+(define (enclosed open close p #:no-space-before-close [nsbc #f])
   (try (pdo open
             (notFollowedBy $space)
             (xs <- (many1Till p close))
-            (return xs))))
+            (match (reverse xs)
+              ;; FIXME: This works but gives a poor error position, not at x
+              [(cons (and x (or #\space #\tab)) _) #:when nsbc (fail x)]
+              [_ (return xs)]))))
 
 ;; Parse contents of 'str' using 'parser' and return result, but,
 ;; restore the original state (input and position).
@@ -79,7 +86,7 @@
 ;; Add this one to parsack itself? (IIUC it's essentially $err with
 ;; ability to specify the message instead of it being '().)
 (define (fail msg)
-  (err (format "not ~a:" msg)))
+  (err (format "not ~a" msg)))
 
 ;; Creates a parser that, if `f?` returns true, fails; otherwise uses
 ;; `parser`. Useful for "fencing off" parts of a grammar. `f?` is
@@ -312,7 +319,7 @@
                         (for/and ([c (in-string last-$str-val)])
                           (char-numeric? c)))
                    (return 'prime)]
-                  [else (fail "")]))))
+                  [else $err]))))
 
 (define $smart-apostrophe
   (pdo (char #\')
@@ -665,20 +672,21 @@
 ;;; Have to define these after $inline
 
 (define $_strong
-  (pdo (fail-just-after-str)
-       (cs  <- (lookAhead (oneOfStrings "**" "__")))
+  (pdo (cs  <- (lookAhead (oneOfStrings "**" "__")))
        (str <- (return (list->string cs)))
-       (xs  <- (enclosed (string str) (try (string str)) $inline))
+       (xs  <- (enclosed (string str)
+                         (try (string str))
+                         $inline
+                         #:no-space-before-close #t))
        (return `(strong () ,@xs))))
 
 (define $_emph
-  (pdo (fail-just-after-str)
-       (c  <- (lookAhead (oneOf "*_")))
+  (pdo (c  <- (lookAhead (oneOf "*_")))
        (xs <- (enclosed (pdo (char c) (notFollowedBy (char c)))
                         (try (pdo (notFollowedBy $strong)
-                                  (char c)
-                                  (notFollowedBy $alphaNum)))
-                        $inline))
+                                  (char c)))
+                        $inline
+                        #:no-space-before-close #t))
        (return `(em () ,@xs))))
 
 

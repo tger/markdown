@@ -399,19 +399,21 @@
             '((p () "no " (em () "YES") " no " (em () "YES"))))
   (check-md "no *YES* no *YES*"
             '((p () "no " (em () "YES") " no " (em () "YES"))))
-  (check-md "no_no_no"
-            '((p () "no_no_no")))
+  (check-md "no_YES_no"
+            '((p () "no" (em () "YES") "no")))
+  (check-md "no_YES_no_YES_"
+            '((p () "no" (em () "YES") "no" (em () "YES"))))
   (check-md "A * no no *"
             '((p () "A * no no *")))
   (check-md "A ** no no **"
             '((p () "A ** no no **")))
-  ;; (check-md "_YES_ no no_no _YES_YES_ _YES YES_"
-  ;;               '((p ()
-  ;;                    (em () "YES")
-  ;;                    " no no_no "
-  ;;                    (em () "YES_YES")
-  ;;                    " "
-  ;;                    (em () "YES YES"))))
+  (check-md "_YES_ no no_no _YES_YES_ _YES YES_"
+                '((p ()
+                     (em () "YES")
+                     " no no_no "
+                     (em () "YES")
+                     "YES_ "
+                     (em () "YES YES"))))
   (check-md "\\_text surrounded by literal underlines\\_"
             '((p () "_text surrounded by literal underlines_")))
   (check-md "\\*text surrounded by literal asterisks\\*"
@@ -429,9 +431,6 @@
   ;; https://github.com/greghendershott/markdown/issues/30
   (check-md "A *[foo](/url/)*"
           '((p () "A " (em () (a ((href "/url/")) "foo")))))
-  ;; Sanity check
-  (check-md "snake_case_var"
-            '((p () "snake_case_var")))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Verbatim code blocks
