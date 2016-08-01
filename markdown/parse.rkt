@@ -16,7 +16,8 @@
          "html.rkt"
          "parsack.rkt"
          "xexpr.rkt"
-         "xexpr2text.rkt")
+         "xexpr2text.rkt"
+	 "responsive-images.rkt")
 
 (provide
  (contract-out
@@ -547,10 +548,12 @@
 
 (define (img block? label src title)
   ;; boolean? string? string? (or/c #f string?) -> xexpr?
+  (printf "handling image ~s\n" src)
+  ;; resize images here
   (define img
     (match title
-      ["" `(img ([src ,src] [alt ,label]))]
-      [t  `(img ([src ,src] [alt ,label] [title ,t]))]))
+      ["" `(img ([src ,src] [srcset ""] [alt ,label]))]
+      [t  `(img ([src ,src] [srcset ""] [alt ,label] [title ,t]))]))
   (cond [(and block? (not (current-strict-markdown?)))
          (define xs (parameterize ([ignore-inline-links? #f]) ;; want them
                       (parse-result (many $inline) label)))
